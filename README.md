@@ -1,3 +1,3 @@
-# New Rust Project
+# libchess
 
-IMPORTANT: RUN init.sh!
+Rust chess library for all sorts of formats in all sorts of scenarios.
