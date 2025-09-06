@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 
 use core::{
     error::Error,
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     hint::unreachable_unchecked,
 };
 
@@ -136,11 +136,25 @@ impl PartialOrd for Piece {
 }
 
 /// A position on the board.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Position {
     /// The packed position. 0bghrrrfff where r is rank, f is file, g is whether it has rank,
     /// and h is whether it has file.
     packed_pos: u8,
+}
+
+impl core::fmt::Debug for Position {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("{self}"))
+    }
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let ch: [char; 2] = (*self).into();
+        f.write_char(ch[0])?;
+        f.write_char(ch[1])
+    }
 }
 
 impl Position {
@@ -211,7 +225,7 @@ impl TryFrom<(Option<u8>, Option<u8>)> for Position {
         }
 
         Ok(Self {
-            packed_pos: (value.1.unwrap_or(0) & 0b111) | ((value.0.unwrap_or(0) & 0b111) << 3) | if value.1.is_some() {
+            packed_pos: ((value.1.unwrap_or(0) & 0b111) << 3) | (value.0.unwrap_or(0) & 0b111) | if value.1.is_some() {
                 0b1000_0000
             } else {
                 0
@@ -264,8 +278,8 @@ impl From<&Position> for (Option<u8>, Option<u8>) {
 
 impl From<Position> for (Option<u8>, Option<u8>) {
     fn from(value: Position) -> Self {
-        let file = (value.packed_pos & 0b111) + 1;
         let rank = ((value.packed_pos & 0b111_000) >> 3) + 1;
+        let file = (value.packed_pos & 0b111) + 1;
         (if value.has_file() {
             Some(file)
         } else {
@@ -291,7 +305,7 @@ impl From<Position> for [char; 2] {
             Some(7) => 'g',
             Some(8) => 'h',
             None => '?',
-            // SAFETY: Physically impossible for three bits to store more then 7. 1 is added.
+            // SAFETY: Physically impossible for three bits to store more then 7. One is added.
             _ => unsafe { unreachable_unchecked() },
         };
         let rank_char = match rank {
@@ -304,7 +318,7 @@ impl From<Position> for [char; 2] {
             Some(7) => '7',
             Some(8) => '8',
             None => '?',
-            // SAFETY: Physically impossible for three bits to store more then 7. 1 is added.
+            // SAFETY: Physically impossible for three bits to store more then 7. One is added.
             _ => unsafe { unreachable_unchecked() },
         };
         [file_char, rank_char]
@@ -314,27 +328,29 @@ impl From<Position> for [char; 2] {
 impl TryFrom<[char; 2]> for Position {
     type Error = anyhow::Error;
     fn try_from(value: [char; 2]) -> Result<Self, Self::Error> {
-        let file: u8 = match value[0] {
-            'a' => 1,
-            'b' => 2,
-            'c' => 3,
-            'd' => 4,
-            'e' => 5,
-            'f' => 6,
-            'g' => 7,
-            'h' => 8,
+        let file: Option<u8> = match value[0] {
+            'a' => Some(0),
+            'b' => Some(1),
+            'c' => Some(2),
+            'd' => Some(3),
+            'e' => Some(4),
+            'f' => Some(5),
+            'g' => Some(6),
+            'h' => Some(7),
+            '?' => None,
             _ => bail!("bad file"),
         };
 
-        let rank: u8 = match value[1] {
-            '1' => 1,
-            '2' => 2,
-            '3' => 3,
-            '4' => 4,
-            '5' => 5,
-            '6' => 6,
-            '7' => 7,
-            '8' => 8,
+        let rank: Option<u8> = match value[1] {
+            '1' => Some(0),
+            '2' => Some(1),
+            '3' => Some(2),
+            '4' => Some(3),
+            '5' => Some(4),
+            '6' => Some(5),
+            '7' => Some(6),
+            '8' => Some(7),
+            '?' => None,
             _ => bail!("bad rank"),
         };
         Ok(Self::try_from((file, rank)).unwrap())
@@ -485,9 +501,9 @@ impl Move {
             s = &s[2..];
 
             ensure!(ch[0].is_ascii_alphabetic(), "bad from file (not ascii alphabetic)");
-            ensure!(ch[0].is_ascii_digit(), "bad from rank (not ascii digit)");
+            ensure!(ch[1].is_ascii_digit(), "bad from rank (not ascii digit)");
 
-            Some(Position::try_from((Some(ch[0].to_ascii_lowercase() as u32 as u8 - b'a'), Some(ch[1] as u32 as u8 - b'0')))?)
+            Some(Position::try_from(ch)?)
         } else {
             None
         };
@@ -657,6 +673,19 @@ mod test {
 
         assert_eq!(Move::parse_alg("♕a6", Some(Color::Black)).unwrap(), Move {
             from: None,
+            to: position!("a6"),
+            piece: Piece::Queen,
+            color: Some(Color::White),
+            capturing: Some(false),
+            castling: Some(false),
+            promotion: None,
+            into_check: None,
+            into_checkmate: None,
+            move_num: None
+        });
+
+        assert_eq!(Move::parse_alg("♕b4a6", Some(Color::Black)).unwrap(), Move {
+            from: Some(position!("b4")),
             to: position!("a6"),
             piece: Piece::Queen,
             color: Some(Color::White),
