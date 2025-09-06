@@ -3,6 +3,7 @@ use alloc::{
     format,
     string::{String, ToString},
 };
+#[allow(unused_imports, reason = "false positive")]
 use proptest::prelude::*;
 
 proptest! {
@@ -116,6 +117,27 @@ proptest! {
                 move_num: None,
             });
         }
+    }
+    #[test]
+    fn fen_full_unicode(s in "\\PC*") {
+        let _ = Game::parse_fen(&s);
+    }
+    #[test]
+    fn parse_all_valid_fen(s in "[rnbqkpRNBQKP1]{8}(/[rnbqkpRNBQKP1]{8}){7} [wb] ((K?Q?k?q?)|-) (-|[a-h][1-8])", halfmove_clock in 0..=65535, fullmove_num in 1..=65535) {
+        let _ = Game::parse_fen(format!("{s} {halfmove_clock} {fullmove_num}")).unwrap();
+    }
+}
+
+proptest!{
+    #![proptest_config(ProptestConfig { fork: true, ..Default::default() })]
+    #[test]
+    fn no_panic_into_fen(game: Game) {
+        let _ = game.into_fen();
+    }
+    #[test]
+    fn parse_all_valid_fen_correctly(game: Game) {
+        let fen = game.into_fen();
+        assert_eq!(dbg!(game), dbg!(Game::parse_fen(&fen).unwrap()));
     }
 }
 

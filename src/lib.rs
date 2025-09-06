@@ -6,12 +6,18 @@
     clippy::all,
     clippy::ignore_without_reason
 )]
-#![no_std]
+#![cfg_attr(not(test), no_std)]
+#![allow(clippy::format_push_string, reason = "no_std")]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+
+#[cfg(test)]
+use proptest::prelude::*;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 
 use core::{
     error::Error,
@@ -21,9 +27,18 @@ use core::{
 
 use anyhow::{anyhow, bail, ensure};
 
+#[cfg(test)]
+mod test;
+
+mod board;
+
+pub use board::*;
+
 /// The color of a piece.
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[expect(missing_docs, reason = "people know what colors are")]
+#[cfg_attr(test, proptest(no_params))]
 pub enum Color {
     White,
     Black,
@@ -43,7 +58,9 @@ impl Color {
 }
 
 /// A piece.
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(test, proptest(no_params))]
 pub enum Piece {
     /// King - value [`u8::MAX`] (255).
     King,
@@ -148,8 +165,32 @@ impl Display for Piece {
     }
 }
 
+#[allow(dead_code, reason = "may be unused but still useful")]
+#[cfg(test)]
+fn non_empty_position_with_option() -> SBoxedStrategy<Option<Position>> {
+    any::<Option<u8>>()
+        .prop_map(|v| {
+            v.map(|v| Position {
+                packed_pos: v | 0b1100_0000,
+            })
+        })
+        .sboxed()
+}
+
+#[allow(dead_code, reason = "may be unused but still useful")]
+#[cfg(test)]
+fn non_empty_position() -> SBoxedStrategy<Position> {
+    any::<u8>()
+        .prop_map(|v| Position {
+            packed_pos: v | 0b1100_0000,
+        })
+        .sboxed()
+}
+
 /// A position on the board.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(Arbitrary))]
+#[cfg_attr(test, proptest(no_params))]
 pub struct Position {
     /// The packed position. 0bghrrrfff where r is rank, f is file, g is whether it has file,
     /// and h is whether it has rank.
@@ -374,7 +415,7 @@ impl TryFrom<&str> for Position {
     }
 }
 
-/// Convinence macro for creating a [`Position`] from something like "a4".
+/// Convenience macro for creating a [`Position`] from something like "a4".
 #[macro_export]
 macro_rules! position {
     ($pos:literal) => {
@@ -413,7 +454,7 @@ impl Move {
     ///
     /// # Errors
     /// If there was an error parsing the algebraic notation, it's returned.
-    #[expect(clippy::missing_panics_doc, reason = "ideally false")]
+    #[expect(clippy::missing_panics_doc, reason = "testedly impossible")]
     #[expect(clippy::too_many_lines, reason = "idgaf")]
     pub fn parse_alg_char_slice(
         s: impl AsRef<[char]>,
@@ -475,7 +516,7 @@ impl Move {
         {
             let ch = s[0];
             s = &s[1..];
-            if ch.is_ascii_digit() {
+            if ch.is_ascii_digit() && ch > '0' {
                 // A rank
                 Some(Position::try_from((None, Some(ch as u32 as u8 - b'1')))?)
             } else if ch.is_ascii_alphabetic() {
@@ -582,6 +623,26 @@ impl Move {
     pub fn parse_alg(s: impl AsRef<str>, color: Option<Color>) -> Result<Self, anyhow::Error> {
         Self::parse_alg_char_slice(s.as_ref().chars().collect::<Vec<char>>().as_slice(), color)
     }
+    /// Turn a [`Move`] into a long form of algebraic notation.
+    ///
+    /// # Errors
+    /// If this `Move` has no `from` position, an error is returned.
+    #[cfg(feature = "alloc")]
+    pub fn into_algebraic_long(self) -> Result<String, anyhow::Error> {
+        let mut out = if let Some(from) = self.from {
+            from.to_string()
+        } else {
+            bail!("this move should have a `from` position for long algebraic notation");
+        };
+
+        out += self.to.to_string();
+
+        if let Some(piece) = self.promotion {
+            out += piece.to_string().to_lowercase();
+        }
+
+        Ok(out)
+    }
 }
 
 impl PartialOrd for Move {
@@ -591,5 +652,27 @@ impl PartialOrd for Move {
     }
 }
 
-#[cfg(test)]
-mod test;
+/// Convert a decimal literal into a number.
+fn from_decimal_u16(s: impl AsRef<[u8]>) -> Result<u16, anyhow::Error> {
+    let mut out = 0u16;
+    for b in s.as_ref() {
+        if let Some(new) = out.checked_mul(10) {
+            out = new;
+        } else {
+            bail!("too large number; must be 65535 or less");
+        }
+        match *b {
+            b'0'..=b'9' => {
+                if let Some(new) = out.checked_add(u16::from(b - b'0')) {
+                    out = new;
+                } else {
+                    bail!("too large number; must be 65535 or less");
+                }
+            }
+            b'-' => bail!("negative numbers not supported"),
+            b'.' => bail!("fractional numbers not supported"),
+            _ => bail!("unknown character in decimal number"),
+        }
+    }
+    Ok(out)
+}

@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 46bda63cfee7f64469e68eb61a835923b61d9262d9feba5c26c2dae64a43ba20 # shrinks to game = Game { board: Board([None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None]), turn: White, black_castling: Neither, white_castling: Neither, last_en_passant: None, halfmove_clock: 0, move_number: 0 }
+cc 8e1bef2d35f0226267697e064ec2c2ccf31b99ea522ad68d26b3d705d370fcf7 # shrinks to game = 8/8/8/8/8/8/8/8 w - ?? 0 0

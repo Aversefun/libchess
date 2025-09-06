@@ -1,4 +1,13 @@
 {
     "rust-analyzer.check.command": "clippy",
     "git.enabled": false,
+    "spellright.language": [
+        "en_US-large"
+    ],
+    "spellright.documentTypes": [
+        "markdown",
+        "latex",
+        "plaintext",
+        "rust"
+    ],
 }
